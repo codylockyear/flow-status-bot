@@ -34,7 +34,7 @@ module.exports = {
         // Ensure the command is used in a guild (server) context for nickname changes
         if (!interaction.guild || !interaction.member) {
             // Use reply here because deferReply hasn't happened yet
-            await interaction.reply({ content: '❌ This command can only be used in a server to manage nicknames.', ephemeral: true });
+            await interaction.reply({ content: '❌ This command can only be used in a server to manage nicknames.', flags: 64 });
             return;
         }
 
