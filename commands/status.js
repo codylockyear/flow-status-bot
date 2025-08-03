@@ -5,7 +5,7 @@ const db = require('../db'); // Import your database connection module
 function cleanNickname(name) {
     // This regex looks for a space followed by [status] at the end of the string.
     // Ensure this regex matches the exact status options defined in the SlashCommandBuilder.
-    const statusPattern = /\s\[(creative-flow|client-work|available|busy|break)\]$/i;
+    const statusPattern = /\\\\s\\\\[(creative-flow|client-work|available|busy|break)\\\\]$/i;
     return name.replace(statusPattern, '').trim(); // .trim() to remove potential trailing spaces
 }
 
@@ -33,12 +33,17 @@ module.exports = {
         
         // Ensure the command is used in a guild (server) context for nickname changes
         if (!interaction.guild || !interaction.member) {
-            await interaction.reply({ content: '❌ This command can only be used in a server to manage nicknames.', flags: 64 });
+            // Use reply here because deferReply hasn't happened yet
+            await interaction.reply({ content: '❌ This command can only be used in a server to manage nicknames.', ephemeral: true });
             return;
         }
 
         const guildId = interaction.guild.id; // Guild ID is essential for nicknames and DB operations
         const member = interaction.member; // The GuildMember object for the user
+
+        // Defer the reply to give more time for database operations
+        // All subsequent replies will use editReply
+        await interaction.deferReply({ ephemeral: true }); 
 
         try {
             if (userStatus) { // User provided a status to set
@@ -64,16 +69,19 @@ module.exports = {
 
                 try {
                     await member.setNickname(newNickname, 'Set user status via Flow Status Bot');
-                    replyContent += `\nYour server nickname has been updated to: \`${newNickname}\`.`;
+                    replyContent += `
+Your server nickname has been updated to: \`${newNickname}\`.`;
                 } catch (nickError) {
                     console.error(`Failed to set nickname for ${member.user.tag} (${userId}) in guild ${guildId}:`, nickError);
                     if (nickError.code === 50013) { // Missing Permissions
-                        replyContent += `\n⚠️ I could not update your nickname due to missing permissions. Please ensure I have the "Manage Nicknames" permission and my role is above yours.`;
+                        replyContent += `
+⚠️ I could not update your nickname due to missing permissions. Please ensure I have the "Manage Nicknames" permission and my role is above yours.`;
                     } else {
-                        replyContent += `\n⚠️ An unexpected error occurred while trying to update your nickname.`;
+                        replyContent += `
+⚠️ An unexpected error occurred while trying to update your nickname.`;
                     }
                 }
-                await interaction.reply({ content: replyContent, flags: 64 });
+                await interaction.editReply({ content: replyContent }); // Use editReply after deferring
 
             } else { // User did not provide a status, so check current status
                 const result = await db.query('SELECT * FROM get_user_status($1, $2)', [userId, guildId]);
@@ -103,17 +111,20 @@ module.exports = {
                     if (member.nickname !== expectedNickname) {
                         try {
                             await member.setNickname(expectedNickname, 'Synchronize user status nickname');
-                            replyContent += `\nYour server nickname has been synchronized to: \`${expectedNickname}\`.`;
+                            replyContent += `
+Your server nickname has been synchronized to: \`${expectedNickname}\`.`;
                         } catch (nickError) {
                             console.error(`Failed to synchronize nickname for ${member.user.tag} (${userId}) in guild ${guildId}:`, nickError);
                             if (nickError.code === 50013) {
-                                replyContent += `\n⚠️ I could not synchronize your nickname due to missing permissions.`;
+                                replyContent += `
+⚠️ I could not synchronize your nickname due to missing permissions.`;
                             } else {
-                                replyContent += `\n⚠️ An unexpected error occurred while trying to synchronize your nickname.`;
+                                replyContent += `
+⚠️ An unexpected error occurred while trying to synchronize your nickname.`;
                             }
                         }
                     }
-                    await interaction.reply({ content: replyContent, flags: 64 });
+                    await interaction.editReply({ content: replyContent }); // Use editReply after deferring
 
                 } else { // No active status found for the user
                     let replyContent = '🤔 You do not have an active custom status set in this server. Use `/status <your-status>` to set one!';
@@ -132,22 +143,27 @@ module.exports = {
                             // Otherwise, set it to the cleaned display name.
                             const finalNicknameToSet = (cleanedDisplayName === member.user.username) ? null : cleanedDisplayName;
                             await member.setNickname(finalNicknameToSet, 'Remove expired/no status from nickname');
-                            replyContent += `\nYour server nickname has been reset.`;
+                            replyContent += `
+Your server nickname has been reset.`;
                         } catch (nickError) {
                             console.error(`Failed to clear nickname for ${member.user.tag} (${userId}) in guild ${guildId}:`, nickError);
                             if (nickError.code === 50013) {
-                                replyContent += `\n⚠️ I could not reset your nickname due to missing permissions.`;
+                                replyContent += `
+⚠️ I could not reset your nickname due to missing permissions.`;
                             } else {
-                                replyContent += `\n⚠️ An unexpected error occurred while trying to reset your nickname.`;
+                                replyContent += `
+⚠️ An unexpected error occurred while trying to reset your nickname.`;
                             }
                         }
                     }
-                    await interaction.reply({ content: replyContent, flags: 64 });
+                    await interaction.editReply({ content: replyContent }); // Use editReply after deferring
                 }
             }
         } catch (error) {
             console.error('Error interacting with database for status command:', error);
-            await interaction.reply({ content: '❌ An error occurred while trying to process your status. Please try again later.', flags: 64 });
+            // If an error occurs after deferring, use editReply
+            // The ephemeral flag is already set from deferReply, so it's not needed here.
+            await interaction.editReply({ content: '❌ An error occurred while trying to process your status. Please try again later.' });
         }
     },
 };
