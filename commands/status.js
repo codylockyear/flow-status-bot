@@ -3,7 +3,7 @@ const db = require('../db'); // Import your database connection module
 
 // Function to clean a nickname, removing bot-added status tags
 function cleanNickname(name) {
-    const statusPattern = /\\\\s\\\\[(creative-flow|client-work|available|busy|break)\\\\\\\\]$/i;
+    const statusPattern = /\\s\\[(creative-flow|client-work|available|busy|break)\\]$/i;
     return name.replace(statusPattern, '').trim();
 }
 
@@ -11,7 +11,7 @@ module.exports = {
     // Define the slash command data
     data: new SlashCommandBuilder()
         .setName('status')
-        .setDescription('Set your custom status or view current status (DEBUG MODE).\')
+        .setDescription('Set your custom status or view current status (DEBUG MODE).') // FIXED: Removed trailing backslash
         .addStringOption(option =>
             option.setName('status')
                 .setDescription('Your desired status (ignored in DEBUG MODE)')
@@ -36,20 +36,19 @@ module.exports = {
         }
 
         // Defer the reply to give more time for database operations.
-        // This is now outside the initial guild check, so it always runs if in a guild.
         try {
             await interaction.deferReply({ flags: 64 }); // Use flags for ephemeral
         } catch (deferError) {
             console.error(`Failed to defer reply for interaction ${interaction.id}:`, deferError);
-            // If deferReply fails (e.g., Unknown interaction due to timeout),
-            // we cannot reply or editReply. Log the error and exit.
+            // If deferReply fails (e.g., Unknown interaction due to timeout or Discord API error),
+            // we cannot reply or editReply. Log the error and exit to prevent InteractionNotReplied.
             return;
         }
 
-        let replyContent = \'\';
+        let replyContent = '';
 
         try {
-            console.log(\'Executing database status check (DEBUG MODE)...\');
+            console.log('Executing database status check (DEBUG MODE)...');
             
             // Simple database test - just check connection and get basic info
             const dbTest = await db.query(`
@@ -60,7 +59,7 @@ module.exports = {
                 FROM user_status
             `);
             
-            console.log(\'Database query successful:\', dbTest.rows[0]);
+            console.log('Database query successful:', dbTest.rows[0]);
             
             // Try to insert a status record (simple INSERT, no conflicts)
             const testUserId = interaction.user.id;
@@ -71,9 +70,9 @@ module.exports = {
                 VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL \'1 hour\')
                 ON CONFLICT (user_id, guild_id, timestamp) DO UPDATE SET
                 status = EXCLUDED.status, expires_at = EXCLUDED.expires_at;
-            `, [testUserId, testGuildId, \'creative-flow-test\']);
+            `, [testUserId, testGuildId, 'creative-flow-test']);
             
-            console.log(\'Status test record inserted/updated for user:\', testUserId);
+            console.log('Status test record inserted/updated for user:', testUserId);
 
             replyContent = `✅ Database test successful!
 Connected. Current DB time: \` ${dbTest.rows[0].current_time.toISOString()} \`
@@ -82,7 +81,7 @@ Active records: \`${dbTest.rows[0].active_records}\`
 A test status was also inserted/updated for your ID.`;
             
         } catch (error) {
-            console.error(\'Database operation failed during DEBUG MODE test:\', error);
+            console.error('Database operation failed during DEBUG MODE test:', error);
             replyContent = `❌ Database test failed!
 Error: \` ${error.message} \`
 Check bot logs on Render for full details.`;
