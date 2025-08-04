@@ -55,6 +55,7 @@ module.exports = {
         try {
             if (userStatus) { // User provided a status to set
                 // Call the PostgreSQL function to set/update status
+                // The set_user_status function in DB now handles ON CONFLICT (user_id, guild_id)
                 await db.query('SELECT set_user_status($1, $2, $3)', [userId, guildId, userStatus]);
                 replyContent = `✅ Your status has been set to: **${userStatus}**. It will expire in 4 hours.`;
 
@@ -91,6 +92,7 @@ Your server nickname has been updated to: \`${newNickname}\`.`;
                 await interaction.editReply({ content: replyContent });
 
             } else { // User did not provide a status, so get current status
+                // The get_user_status function in DB now returns (user_id, guild_id, status, expires_at)
                 const result = await db.query('SELECT * FROM get_user_status($1, $2)', [userId, guildId]);
 
                 if (result.rows.length > 0) { // Active status found
@@ -168,8 +170,6 @@ Your server nickname has been reset.`;
             }
         } catch (error) {
             console.error('Error interacting with database for status command:', error);
-            // If an error occurs after deferring, use editReply.
-            // The ephemeral flag is already set from deferReply, so it's not needed here.
             await interaction.editReply({ content: '❌ An error occurred while trying to process your status. Please try again later.' });
         }
     },
